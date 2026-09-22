@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rocket Soccer 3D</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="gameArea">
+    <div class="hud">
+      <div id="score" class="score">0 : 0</div>
+      <div id="timer" class="timer">90</div>
+
+      <div class="boostWrap">
+        <div id="boostFill" class="boostFill"></div>
+      </div>
+    </div>
+
+    <div id="countdown" class="countdown">3</div>
+
+    <div id="menu" class="overlay">
+      <div class="panel">
+        <h1 class="title">Rocket Soccer</h1>
+        <button id="startBtn">Start Match</button>
+      </div>
+    </div>
+
+    <div class="touchControls">
+      <div class="movePad">
+        <div></div>
+        <button class="moveBtn" data-key="w">▲</button>
+        <div></div>
+
+        <button class="moveBtn" data-key="a">◀</button>
+        <button class="moveBtn" data-key="s">▼</button>
+        <button class="moveBtn" data-key="d">▶</button>
+      </div>
+
+      <div class="actionPad">
+        <button class="actionBtn" data-key="boost">Boost</button>
+        <button class="actionBtn" data-key="jump">Jump</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./game.js"></script>
+</body>
+</html>

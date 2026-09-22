@@ -1,49 +1,551 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rocket Soccer 3D</title>
-  <link rel="stylesheet" href="./style.css" />
-</head>
-<body>
-  <div id="gameArea">
-    <div class="hud">
-      <div id="score" class="score">0 : 0</div>
-      <div id="timer" class="timer">90</div>
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
-      <div class="boostWrap">
-        <div id="boostFill" class="boostFill"></div>
-      </div>
-    </div>
+const gameArea = document.getElementById("gameArea");
+const scoreEl = document.getElementById("score");
+const timerEl = document.getElementById("timer");
+const boostFill = document.getElementById("boostFill");
+const countdownEl = document.getElementById("countdown");
+const menuEl = document.getElementById("menu");
+const startBtn = document.getElementById("startBtn");
 
-    <div id="countdown" class="countdown">3</div>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x071018);
+scene.fog = new THREE.Fog(0x071018, 24, 100);
 
-    <div id="menu" class="overlay">
-      <div class="panel">
-        <h1 class="title">Rocket Soccer</h1>
-        <button id="startBtn">Start Match</button>
-      </div>
-    </div>
+const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 220);
+camera.position.set(0, 7, 16);
 
-    <div class="touchControls">
-      <div class="movePad">
-        <div></div>
-        <button class="moveBtn" data-key="w">▲</button>
-        <div></div>
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+gameArea.appendChild(renderer.domElement);
 
-        <button class="moveBtn" data-key="a">◀</button>
-        <button class="moveBtn" data-key="s">▼</button>
-        <button class="moveBtn" data-key="d">▶</button>
-      </div>
+scene.add(new THREE.HemisphereLight(0xbfe6ff, 0x224232, 1.7));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(-18, 24, 16);
+scene.add(sun);
 
-      <div class="actionPad">
-        <button class="actionBtn" data-key="boost">Boost</button>
-        <button class="actionBtn" data-key="jump">Jump</button>
-      </div>
-    </div>
-  </div>
+const keys = {};
+const touch = { w: false, a: false, s: false, d: false, boost: false, jump: false };
 
-  <script type="module" src="./game.js"></script>
-</body>
-</html>
+document.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (e.code === "Space") keys.space = true;
+  if (k === "r") resetPositions();
+  if (k === "e") jump(player);
+  if (k === "q") flip(player);
+});
+
+document.addEventListener("keyup", (e) => {
+  const k = e.key.toLowerCase();
+  keys[k] = false;
+  if (e.code === "Space") keys.space = false;
+});
+
+document.querySelectorAll("[data-key]").forEach((button) => {
+  const key = button.dataset.key;
+  const set = (value) => {
+    if (key === "boost") touch.boost = value;
+    else if (key === "jump") touch.jump = value;
+    else touch[key] = value;
+  };
+  button.addEventListener("pointerdown", (e) => { e.preventDefault(); set(true); });
+  button.addEventListener("pointerup", (e) => { e.preventDefault(); set(false); });
+  button.addEventListener("pointercancel", (e) => { e.preventDefault(); set(false); });
+  button.addEventListener("pointerleave", (e) => { e.preventDefault(); set(false); });
+});
+
+startBtn.addEventListener("click", () => {
+  menuEl.classList.add("hidden");
+  startCountdown();
+});
+
+const A = { width: 26, depth: 16, ceiling: 8, goalWidth: 5.2, ballRadius: 0.55 };
+const state = { left: 0, right: 0, timer: 90, started: false, countdownActive: false };
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function v(x = 0, y = 0, z = 0) {
+  return new THREE.Vector3(x, y, z);
+}
+
+function mat(color, extra = {}) {
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.15, ...extra });
+}
+
+function makeBox(size, pos, material, parent = scene) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+  mesh.position.set(...pos);
+  parent.add(mesh);
+  return mesh;
+}
+
+function buildArena() {
+  makeBox([A.width + 1.2, 0.8, A.depth + 1.2], [0, -0.45, 0], mat(0x1a7a47));
+
+  const wallMat = mat(0x2b4e63);
+  makeBox([A.width + 1.6, 6.8, 0.7], [0, 3.2, -A.depth / 2 - 0.35], wallMat);
+  makeBox([A.width + 1.6, 6.8, 0.7], [0, 3.2, A.depth / 2 + 0.35], wallMat);
+  makeBox([0.7, 6.8, A.depth + 1.4], [-A.width / 2 - 0.35, 3.2, 0], wallMat);
+  makeBox([0.7, 6.8, A.depth + 1.4], [A.width / 2 + 0.35, 3.2, 0], wallMat);
+
+  makeBox([A.width + 2.2, 0.35, A.depth + 2.2], [0, A.ceiling, 0], mat(0x143448, { transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
+
+  const centerLineMat = mat(0xffffff, { emissive: 0x1d1d1d });
+  makeBox([0.08, 0.04, A.depth - 0.7], [0, 0.08, 0], centerLineMat);
+
+  const circle = new THREE.Mesh(
+    new THREE.RingGeometry(2.2, 2.6, 80),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+  );
+  circle.rotation.x = -Math.PI / 2;
+  circle.position.y = 0.05;
+  scene.add(circle);
+
+  const goalMat = mat(0x8fe2ff, { transparent: true, opacity: 0.15, emissive: 0x153d5d, emissiveIntensity: 0.8 });
+  makeBox([1.1, 3.2, A.goalWidth], [-A.width / 2 - 0.8, 1.5, 0], goalMat);
+  makeBox([1.1, 3.2, A.goalWidth], [A.width / 2 + 0.8, 1.5, 0], goalMat);
+
+  const boostPads = [
+    { x: -9, z: -4.5 },
+    { x: -9, z: 4.5 },
+    { x: 9, z: -4.5 },
+    { x: 9, z: 4.5 }
+  ];
+
+  for (const pad of boostPads) {
+    const padGroup = new THREE.Group();
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 0.18, 32),
+      mat(0x102633, { emissive: 0xffd166, emissiveIntensity: 0.7 })
+    );
+    base.position.y = 0.12;
+    padGroup.add(base);
+
+    const top = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.72, 0.72, 0.08, 32),
+      mat(0xffd166, { emissive: 0xffc857, emissiveIntensity: 1.5 })
+    );
+    top.position.y = 0.25;
+    padGroup.add(top);
+
+    padGroup.position.set(pad.x, 0, pad.z);
+    scene.add(padGroup);
+    pad.mesh = padGroup;
+  }
+
+  return boostPads;
+}
+
+function makeCar(color, x, z, heading) {
+  const group = new THREE.Group();
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.58, 2.9), mat(color, { metalness: 0.35, roughness: 0.45 }));
+  body.position.set(0, 0.72, 0);
+  group.add(body);
+
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.34, 1.15), mat(0xe7f2ff, { transparent: true, opacity: 0.3 }));
+  nose.position.set(0.96, 0.76, 0);
+  group.add(nose);
+
+  const wheelGeo = new THREE.CylinderGeometry(0.29, 0.29, 0.22, 16);
+  const wheelMat = mat(0x111111);
+  const wheels = [];
+  const wheelOffsets = [
+    [-0.8, 0.25, -1.05],
+    [0.8, 0.25, -1.05],
+    [-0.8, 0.25, 1.05],
+    [0.8, 0.25, 1.05]
+  ];
+
+  for (const [xOff, yOff, zOff] of wheelOffsets) {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(xOff, yOff, zOff);
+    group.add(wheel);
+    wheels.push(wheel);
+  }
+
+  const glow = new THREE.PointLight(color, 0, 8, 2);
+  glow.position.set(1.2, 0.6, 0);
+  group.add(glow);
+
+  group.position.set(x, 0, z);
+  group.rotation.y = heading;
+  scene.add(group);
+
+  return {
+    group,
+    vel: v(),
+    heading,
+    boost: 100,
+    ground: true,
+    jumps: 0,
+    airVel: 0,
+    spin: 0,
+    radius: 1.15,
+    wheels,
+    glow,
+    pitch: 0,
+    roll: 0
+  };
+}
+
+const boostPads = buildArena();
+const player = makeCar(0x41a8ff, -5.6, 0, 0);
+const enemy = makeCar(0xff5c5c, 5.6, 0, Math.PI);
+
+const ball = new THREE.Mesh(
+  new THREE.SphereGeometry(A.ballRadius, 32, 24),
+  mat(0xf2efe8, { roughness: 0.55 })
+);
+ball.position.set(0, A.ballRadius, 0);
+ball.userData.vel = v();
+scene.add(ball);
+
+function resetPositions() {
+  player.group.position.set(-5.6, 0, 0);
+  player.group.rotation.set(0, 0, 0);
+  player.heading = 0;
+  player.vel.set(0, 0, 0);
+  player.ground = true;
+  player.jumps = 0;
+  player.airVel = 0;
+  player.boost = 100;
+
+  enemy.group.position.set(5.6, 0, 0);
+  enemy.group.rotation.set(0, Math.PI, 0);
+  enemy.heading = Math.PI;
+  enemy.vel.set(0, 0, 0);
+  enemy.ground = true;
+  enemy.jumps = 0;
+  enemy.airVel = 0;
+  enemy.boost = 100;
+
+  ball.position.set(0, A.ballRadius, 0);
+  ball.userData.vel.set(0, 0, 0);
+}
+
+function jump(carRef) {
+  if (carRef.ground) {
+    carRef.airVel = 7.8;
+    carRef.ground = false;
+    carRef.jumps = 1;
+  } else if (carRef.jumps < 2) {
+    carRef.airVel = 6.8;
+    carRef.jumps = 2;
+  }
+}
+
+function flip(carRef) {
+  if (carRef.spin > 0) return;
+  carRef.spin = 0.8;
+  const forward = v(Math.sin(carRef.heading), 0, Math.cos(carRef.heading));
+  carRef.vel.addScaledVector(forward, 5.2);
+  if (!carRef.ground) carRef.airVel += 2.5;
+  carRef.pitch += 0.9;
+  carRef.roll += 0.7;
+}
+
+function applyBoostPads(carRef) {
+  for (const pad of boostPads) {
+    const dx = carRef.group.position.x - pad.x;
+    const dz = carRef.group.position.z - pad.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 1.1) {
+      const forward = v(Math.sin(carRef.heading), 0, Math.cos(carRef.heading));
+      carRef.vel.addScaledVector(forward, 12.5);
+      carRef.boost = Math.min(100, carRef.boost + 25);
+      pad.mesh.scale.setScalar(1.4);
+      setTimeout(() => pad.mesh.scale.setScalar(1), 900);
+    }
+  }
+}
+
+function driveCar(carRef, throttle, reverse, left, right, boostHeld, dt) {
+  const steer = (right ? 1 : 0) - (left ? 1 : 0);
+  const forward = v(Math.sin(carRef.heading), 0, Math.cos(carRef.heading));
+  const speed = carRef.vel.length();
+  carRef.heading += steer * dt * (1.9 + clamp(speed / 12, 0, 1) * 2.2);
+
+  const accel = (throttle ? 22 : 0) - (reverse ? 15 : 0);
+  if (accel !== 0) {
+    carRef.vel.addScaledVector(forward, accel * dt);
+  }
+
+  if (boostHeld && carRef.boost > 0) {
+    carRef.vel.addScaledVector(forward, 28 * dt);
+    carRef.boost = Math.max(0, carRef.boost - 26 * dt);
+    carRef.glow.intensity = 2.7;
+  } else {
+    carRef.glow.intensity = 0;
+    carRef.boost = Math.min(100, carRef.boost + 12 * dt);
+  }
+
+  if (!carRef.ground) {
+    carRef.airVel -= 17 * dt;
+    carRef.group.position.y += carRef.airVel * dt;
+  } else {
+    carRef.airVel = 0;
+    carRef.group.position.y = 0;
+  }
+
+  if (carRef.group.position.y <= 0) {
+    carRef.group.position.y = 0;
+    carRef.airVel = 0;
+    carRef.ground = true;
+    carRef.jumps = 0;
+  }
+
+  carRef.vel.multiplyScalar(1 - dt * 0.7);
+  if (carRef.vel.length() > 20) carRef.vel.setLength(20);
+
+  carRef.group.position.addScaledVector(carRef.vel, dt);
+  carRef.group.rotation.y = carRef.heading;
+  carRef.group.rotation.x = carRef.pitch;
+  carRef.group.rotation.z = carRef.roll;
+
+  carRef.pitch *= 0.92;
+  carRef.roll *= 0.92;
+  carRef.spin = Math.max(0, carRef.spin - dt);
+
+  const margin = 1.2;
+  if (carRef.group.position.x < -A.width / 2 + margin) {
+    carRef.group.position.x = -A.width / 2 + margin;
+    carRef.vel.x *= -0.42;
+  }
+  if (carRef.group.position.x > A.width / 2 - margin) {
+    carRef.group.position.x = A.width / 2 - margin;
+    carRef.vel.x *= -0.42;
+  }
+  if (carRef.group.position.z < -A.depth / 2 + margin) {
+    carRef.group.position.z = -A.depth / 2 + margin;
+    carRef.vel.z *= -0.42;
+  }
+  if (carRef.group.position.z > A.depth / 2 - margin) {
+    carRef.group.position.z = A.depth / 2 - margin;
+    carRef.vel.z *= -0.42;
+  }
+
+  if (carRef.group.position.y > A.ceiling - 0.8) {
+    carRef.group.position.y = A.ceiling - 0.8;
+    carRef.airVel = -Math.abs(carRef.airVel) * 0.18;
+  }
+
+  for (const wheel of carRef.wheels) {
+    wheel.rotation.x += carRef.vel.length() * dt * 1.8;
+  }
+
+  applyBoostPads(carRef);
+}
+
+function updatePlayer(dt) {
+  const jumpPressed = touch.jump || keys.e;
+  if (jumpPressed) {
+    jump(player);
+    touch.jump = false;
+    keys.e = false;
+  }
+
+  if (keys.q) {
+    flip(player);
+    keys.q = false;
+  }
+
+  driveCar(
+    player,
+    keys.w || touch.w,
+    keys.s || touch.s,
+    keys.a || touch.a,
+    keys.d || touch.d,
+    keys.space || touch.boost,
+    dt
+  );
+}
+
+function updateEnemy(dt) {
+  const toBall = v(ball.position.x - enemy.group.position.x, 0, ball.position.z - enemy.group.position.z);
+  const targetHeading = Math.atan2(toBall.x, toBall.z);
+  const raw = targetHeading - enemy.heading;
+  const delta = ((raw + Math.PI) % (Math.PI * 2)) - Math.PI;
+  enemy.heading += delta * dt * 2.3;
+
+  const forward = v(Math.sin(enemy.heading), 0, Math.cos(enemy.heading));
+  const dist = toBall.length();
+  const throttle = dist > 1.4;
+  const reverse = dist < 0.8;
+  const steer = delta > 0.25 ? 1 : delta < -0.25 ? -1 : 0;
+  const boost = dist < 4.5 && enemy.boost > 0;
+  driveCar(enemy, throttle, reverse, steer < 0, steer > 0, boost, dt);
+
+  if (ball.position.y > 2 && dist < 5.5) jump(enemy);
+  if (dist < 2.5 && Math.random() < 0.04) flip(enemy);
+}
+
+function updateBall(dt) {
+  ball.userData.vel.y -= 18 * dt;
+  ball.position.addScaledVector(ball.userData.vel, dt);
+
+  if (ball.position.y <= A.ballRadius) {
+    ball.position.y = A.ballRadius;
+    if (ball.userData.vel.y < 0) ball.userData.vel.y *= -0.75;
+  }
+
+  if (ball.position.y >= A.ceiling - A.ballRadius) {
+    ball.position.y = A.ceiling - A.ballRadius;
+    ball.userData.vel.y *= -0.65;
+  }
+
+  const r = A.ballRadius;
+  if (ball.position.z < -A.depth / 2 + r) {
+    ball.position.z = -A.depth / 2 + r;
+    ball.userData.vel.z *= -0.9;
+  }
+  if (ball.position.z > A.depth / 2 - r) {
+    ball.position.z = A.depth / 2 - r;
+    ball.userData.vel.z *= -0.9;
+  }
+  if (ball.position.x < -A.width / 2 + r) {
+    ball.position.x = -A.width / 2 + r;
+    ball.userData.vel.x *= -0.9;
+  }
+  if (ball.position.x > A.width / 2 - r) {
+    ball.position.x = A.width / 2 - r;
+    ball.userData.vel.x *= -0.9;
+  }
+
+  const goalGap = Math.abs(ball.position.z) <= A.goalWidth / 2;
+  if (ball.position.x < -A.width / 2 - 0.2 && goalGap) {
+    state.right += 1;
+    resetPositions();
+  }
+  if (ball.position.x > A.width / 2 + 0.2 && goalGap) {
+    state.left += 1;
+    resetPositions();
+  }
+
+  ball.userData.vel.x *= 0.995;
+  ball.userData.vel.z *= 0.995;
+  if (ball.userData.vel.length() > 28) ball.userData.vel.setLength(28);
+}
+
+function ballCarCollision(carRef) {
+  const dx = ball.position.x - carRef.group.position.x;
+  const dy = ball.position.y - (carRef.group.position.y + 0.7);
+  const dz = ball.position.z - carRef.group.position.z;
+  const distSq = dx * dx + dy * dy + dz * dz;
+  const minDist = carRef.radius + A.ballRadius + 0.1;
+
+  if (distSq < minDist * minDist) {
+    const dist = Math.sqrt(distSq) || 0.0001;
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const nz = dz / dist;
+    const overlap = minDist - dist;
+
+    ball.position.x += nx * overlap;
+    ball.position.y += ny * overlap;
+    ball.position.z += nz * overlap;
+
+    const relVel = ball.userData.vel.clone().sub(carRef.vel);
+    const normalVel = relVel.x * nx + relVel.y * ny + relVel.z * nz;
+    if (normalVel < 0) {
+      const impulse = -(1.65 + 0.2) * normalVel;
+      ball.userData.vel.x += impulse * nx;
+      ball.userData.vel.y += impulse * ny * 0.9;
+      ball.userData.vel.z += impulse * nz;
+    }
+
+    ball.userData.vel.x += carRef.vel.x * 0.35;
+    ball.userData.vel.z += carRef.vel.z * 0.35;
+    ball.userData.vel.y += carRef.airVel * 0.18 + 0.55;
+  }
+}
+
+function updateHud() {
+  scoreEl.textContent = `${state.left} : ${state.right}`;
+  timerEl.textContent = String(Math.max(0, Math.ceil(state.timer)));
+  boostFill.style.width = `${player.boost}%`;
+}
+
+function showCountdown(number) {
+  countdownEl.textContent = String(number);
+  countdownEl.classList.add("show");
+}
+
+function startCountdown() {
+  state.started = true;
+  state.countdownActive = true;
+  let count = 3;
+  showCountdown(count);
+
+  const timer = setInterval(() => {
+    count -= 1;
+    if (count > 0) {
+      showCountdown(count);
+    } else if (count === 0) {
+      showCountdown("GO");
+    } else {
+      clearInterval(timer);
+      countdownEl.classList.remove("show");
+      state.countdownActive = false;
+      state.timer = 90;
+      resetPositions();
+      updateHud();
+    }
+  }, 500);
+}
+
+function updateCamera() {
+  const forward = v(Math.sin(player.heading), 0, Math.cos(player.heading));
+  const target = player.group.position.clone().add(forward.clone().multiplyScalar(-9)).add(v(0, 5.6, 0));
+  camera.position.lerp(target, 0.08);
+
+  const lookAtTarget = ball.position.clone().lerp(player.group.position.clone().add(v(0, 1.2, 0)), 0.4);
+  camera.lookAt(lookAtTarget);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.033, 1 / 60);
+
+  if (state.started && !state.countdownActive) {
+    state.timer -= dt;
+    if (state.timer <= 0) {
+      state.timer = 90;
+      state.left = 0;
+      state.right = 0;
+    }
+
+    updatePlayer(dt);
+    updateEnemy(dt);
+    ballCarCollision(player);
+    ballCarCollision(enemy);
+    updateBall(dt);
+    updateHud();
+  }
+
+  updateCamera();
+  renderer.render(scene, camera);
+}
+
+resetPositions();
+updateHud();
+animate();
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+startBtn.addEventListener("click", () => {
+  menuEl.classList.add("hidden");
+  startCountdown();
+});
+
+console.log("Rocket Soccer upgraded prototype loaded");
+

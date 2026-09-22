@@ -1,220 +1,48 @@
-:root {
-  --bg: #0b1117;
-  --panel: rgba(0,0,0,0.18);
-  --line: rgba(255,255,255,0.12);
-  --text: #f4f4f4;
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rocket Soccer 3D</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="gameArea">
+    <div class="hud">
+      <div id="score" class="score">0 : 0</div>
+      <div id="timer" class="timer">90</div>
+      <div class="boostWrap">
+        <div id="boostFill" class="boostFill"></div>
+      </div>
+    </div>
 
-* { box-sizing: border-box; }
+    <div id="countdown" class="countdown">3</div>
 
-html, body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
-}
+    <div id="menu" class="overlay">
+      <div class="panel">
+        <h1 class="title">Rocket Soccer</h1>
+        <button id="startBtn">Start Match</button>
+      </div>
+    </div>
 
-body {
-  background: var(--bg);
-}
+    <div class="touchControls">
+      <div class="movePad">
+        <div></div>
+        <button class="moveBtn" data-key="w">▲</button>
+        <div></div>
 
-#gameArea {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  background: #071119;
-  overflow: hidden;
-}
+        <button class="moveBtn" data-key="a">◀</button>
+        <button class="moveBtn" data-key="s">▼</button>
+        <button class="moveBtn" data-key="d">▶</button>
+      </div>
 
-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
+      <div class="actionPad">
+        <button class="actionBtn" data-key="boost">Boost</button>
+        <button class="actionBtn" data-key="jump">Jump</button>
+      </div>
+    </div>
+  </div>
 
-.hud {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 12;
-}
-
-.score {
-  position: absolute;
-  left: 50%;
-  top: 18px;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.18);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 10px 18px;
-  font-size: clamp(24px, 2vw, 42px);
-  font-weight: 700;
-  letter-spacing: 2px;
-}
-
-.timer {
-  position: absolute;
-  right: 18px;
-  top: 18px;
-  background: rgba(0,0,0,0.18);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 12px;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.boostWrap {
-  position: absolute;
-  left: 18px;
-  top: 18px;
-  width: 180px;
-  height: 18px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(0,0,0,0.2);
-  overflow: hidden;
-}
-
-.boostFill {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, #ffd166, #f7b800);
-  border-radius: 999px;
-  transition: width 0.08s linear;
-}
-
-.touchControls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 180px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding: 12px 18px 18px;
-  z-index: 20;
-  pointer-events: none;
-}
-
-.movePad {
-  display: grid;
-  grid-template-columns: repeat(3, 54px);
-  grid-template-rows: repeat(3, 54px);
-  gap: 8px;
-  pointer-events: auto;
-}
-
-.moveBtn {
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 14px;
-  background: rgba(255,255,255,0.08);
-  color: white;
-  font-size: 26px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.moveBtn:active {
-  background: rgba(255,255,255,0.18);
-}
-
-.actionPad {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  pointer-events: auto;
-}
-
-.actionBtn {
-  width: 82px;
-  height: 82px;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 50%;
-  background: rgba(255,255,255,0.08);
-  color: white;
-  font-size: 16px;
-  font-weight: 700;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.actionBtn:active {
-  background: rgba(255,255,255,0.18);
-}
-
-.overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(5, 8, 12, 0.55);
-  backdrop-filter: blur(4px);
-  z-index: 30;
-}
-
-.overlay.hidden {
-  display: none;
-}
-
-.panel {
-  background: rgba(20,25,30,0.82);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 18px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.35);
-  padding: 30px 26px;
-  text-align: center;
-}
-
-.title {
-  margin: 0 0 18px;
-  font-size: clamp(28px, 4vw, 48px);
-  font-weight: 800;
-  letter-spacing: 2px;
-}
-
-button {
-  background: linear-gradient(180deg, #ffca5a, #e6a21d);
-  color: #1a1408;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 10px 25px rgba(229,152,20,0.35);
-}
-
-button:hover {
-  filter: brightness(1.05);
-}
-
-.countdown {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: clamp(30px, 7vw, 90px);
-  font-weight: 900;
-  letter-spacing: 3px;
-  color: rgba(255,255,255,0.9);
-  text-shadow: 0 8px 20px rgba(0,0,0,0.35);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-  z-index: 35;
-}
-
-.countdown.show {
-  opacity: 1;
-}
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
